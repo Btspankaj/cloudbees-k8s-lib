@@ -1,4 +1,16 @@
 OperationsCenter:
+  # OperationsCenter.Enabled -- Disable for particular use case like setting up namespaces to host masters only
+  Enabled: true
+  # Operations Center container image
+  image:
+    # OperationsCenter.image.registry -- Docker registry for Operations Center
+    registry: '62049'
+    # OperationsCenter.image.repository -- Docker image repository for Operations Center
+    repository: 'cloudbees-oc'
+    # OperationsCenter.image.tag -- Docker image tag for Operations Center
+    tag: latest
+    # OperationsCenter.image.pullPolicy -- https://kubernetes.io/docs/concepts/containers/images/#updating-images
+    pullPolicy: null
   JavaOpts: >-
     -XX:InitialRAMPercentage=50.0
     -XX:MaxRAMPercentage=50.0
@@ -30,13 +42,13 @@ OperationsCenter:
       operator: Equal
       value: cb-apps
       effect: NoSchedule
-  License:
-    Evaluation:
-      Enabled: true
-      FirstName: ${LicFirstName}
-      LastName: ${LicLastName}
-      Email: ${LicEmail}
-      Company: ${LicCompany}
+      #  License:
+      #Evaluation:
+      #Enabled: true
+      #FirstName: ${LicFirstName}
+      #LastName: ${LicLastName}
+      #Email: ${LicEmail}
+      #Company: ${LicCompany}
 Hibernation:
   Enabled: true
 Master:
@@ -47,3 +59,12 @@ Agents:
   SeparateNamespace:
     Enabled: true
     Name: ${agentNamespace}
+# Common parameters for all components. These can be overridden in each component.
+#Common:
+#  image:
+#    # Common.image.registry -- container registry for the images
+#    registry: '62049'
+#    # Common.image.tag -- container image tag
+#    tag: '2.401.3.3'
+#    # Common.image.pullPolicy -- Used to override the default pull policy for all images
+#    pullPolicy: null

@@ -1,0 +1,77 @@
+MKFILE   		:= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+PARENT_MKFILE   := $(HOME)/.Makefile
+DIR_TF_ROOT		:= $(MKFILE)/../../../../../clouds/aws/root/tmp
+DIR_CHARTS 		:= $(MKFILE)/../../../helm/charts
+DIR_HELM_VALUES := $(MKFILE)/../../../helm/values/cloudbees
+
+include $(PARENT_MKFILE)
+
+# Default Ingress Configuration to ALB in EKS AWS
+CB_LB_CONFIG	?= cb-ci.eks.alb.yaml
+# Default OC URL using subdomains
+#OC_URL 	    ?= source .env && echo "$(PROTOCOL)://cjoc.$(HOSTNAME)"
+OC_URL 	        ?= https://cloudbees.genpact.com/cjoc
+
+define JenkinsCLI
+	@#revision=$(shell helm ls -n cbci | grep cbci-local | awk '{ print $3 }')
+	@if [ \! -f /tmp/jenkins-cli.jar ]; then curl -o /tmp/jenkins-cli.jar "$(OC_URL)/jnlpJars/jenkins-cli.jar"; fi
+	@echo "Jenkins CLI: $(1)"
+	@source .env && \
+		java -jar /tmp/jenkins-cli.jar -s $(OC_URL) -auth $$ADMIN_JENKINS_USER:$$SECRET_JENKINS_PASS -webSocket $(1)
+endef
+
+.PHONY: cbci-helm-update-simple
+cbci-helm-update-simple: ## Install and Update CloudBees Core Modern via Helm.
+cbci-helm-update-simple: check_kubeconfig check_envfile guard-CB_LB_CONFIG
+	$(call print_subtitle,Update Casc values.yaml)
+	sed "/OperationsCenter:/d" < $(DIR_HELM_VALUES)/cb-ci.common.simple.yaml > /tmp/values.tmp.cb-ci.yaml
+	sed -i "/#Common_Configuration/e cat $(DIR_HELM_VALUES)/$(CB_LB_CONFIG)" /tmp/values.tmp.cb-ci.yaml
+	@source .env && \
+		sed "s/\$${hostname}/$$HOSTNAME/g; \
+			s/\$${protocol}/$$PROTOCOL/g; \
+			s/\$${LicFirstName}/$$LIC_FIRSTNAME/g; \
+			s/\$${LicLastName}/$$LIC_LASTNAME/g; \
+			s/\$${LicEmail}/$$LIC_MAIL/g; \
+			s/\$${LicCompany}/$$LIC_COMPANY/g; \
+			s|\$${cert_arn}|arn:aws:acm:ap-south-1:251746746486:certificate/ac9848c0-0d6e-4a36-b9a2-eb68b308626e|g" < /tmp/values.tmp.cb-ci.yaml > $(MKFILE)/values.cb-ci.yaml
+	helm repo add cloudbees https://public-charts.artifacts.cloudbees.com/repository/public/ && helm repo update
+	source .env && \
+		helm upgrade --install cbci cloudbees/cloudbees-core --create-namespace --namespace "$$CBCI_NS" --version "$$CBCI_VERSION" -f "$(MKFILE)/values.cb-ci.yaml"
+	kubectl rollout status sts cjoc --namespace cbci && wait
+
+.PHONY: check_availability
+check_availability: ## Check availability of the OC Example: make check_availability OC_URL=https://cjoc.ci.crl.core.pscbdemos.com/
+check_availability: guard-OC_URL
+	source .env && \
+		until kubectl get ing -n $$CBCI_NS cjoc; do sleep 2 && echo "Waiting for Ingress to get ready"; done
+	@echo "Ingress Ready"
+	source .env && \
+		until curl -u $$ADMIN_JENKINS_USER:$$SECRET_JENKINS_PASS -s $(OC_URL)  > /dev/null; do sleep 10 && echo "Waiting for Operation Center at $(OC_URL)"; done
+	@echo "Operation Center Ready at $(OC_URL)"
+
+.PHONY: update_casc_oc
+update_casc_oc: ## Update Configuration as Code Operation Center
+update_casc_oc: guard-OC_URL
+	zip -r tmp/oc-bundle.zip $(DIR_CHARTS)/cb-ci-local/casc/oc/modern.oc.ldap
+	$(call JenkinsCLI,casc-pre-validate-bundle) < /tmp/oc-bundle.zip
+	$(call JenkinsCLI,restart)
+
+.PHONY: update_casc
+update_casc_cm: ## Update Configuration as Code Controllers
+update_casc_cm: guard-OC_URL
+	$(call JenkinsCLI,casc-check-out-bundles)
+	$(call JenkinsCLI,casc-effective-bundle-validation-log)
+	$(call JenkinsCLI,build admin/restart-all-controllers -s)
+
+.PHONY: cbci-helm-delete
+cbci-helm-delete: ## Delete CloudBees Core Modern via Helm. Ref: https://docs.cloudbees.com/docs/cloudbees-ci/latest/kubernetes-install-guide/kubernetes-uninstall
+cbci-helm-delete: check_kubeconfig check_envfile
+	$(call print_title,Uninstall CloudBees Core via Helm)
+	source .env && \
+		kubectl delete --all pods --grace-period=0 --force --namespace "$$CBCI_NS" && \
+		kubectl delete --all pods --grace-period=0 --force --namespace "$$AGENT_NA" && \
+		helm uninstall cbci --namespace "$$CBCI_NS" || echo "Relese cbci does not exist" && \
+		helm repo remove cloudbees || echo "Repository cloudbees does not exist" && \
+		kubectl delete --all pvc --grace-period=0 --force --namespace "$$CBCI_NS" && \
+		kubectl delete ns "$$AGENT_NA" || echo "There is NOT existing namespace $$AGENT_NA" && \
+		kubectl delete ns "$$CBCI_NS" || echo "There is not existing namespace $$CBCI_NS"

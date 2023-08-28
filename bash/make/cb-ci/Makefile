@@ -85,9 +85,9 @@ update-advance: check_kubeconfig check_envfile guard-CB_LB_CONFIG
 			s/\$${secretJenkins}/$$SECRET_JENKINS_PASS/g; \
 			s/\$${agentNamespace}/$$AGENT_NA/g; \
 			s|\$${agentRegistryURL}|$$REGISTRY_URL|g; \
-			s/\$${agentRegistryUserName}/$$REGISTRY_USER_NAME/g; \
-			s/\$${agentRegistryUserPass}/$$REGISTRY_USER_PASS/g; \
-			s/\$${agentRegistryUserMail}/$$REGISTRY_USER_MAIL/g; \
+                        s/\$${agentRegistryUserName}/$$REGISTRY_USER_NAME/g; \
+                        s/\$${agentRegistryUserPass}/$$REGISTRY_USER_PASS/g; \
+                        s/\$${agentRegistryUserMail}/$$REGISTRY_USER_MAIL/g; \
 			s/\$${NLoadControllers}/$$N_LOAD_CONTROLLER/g;" < $(DIR_HELM_VALUES)/cb-ci-local.yaml > $(MKFILE)/values.cb-ci-local.yaml
 	source .env && \
 		helm upgrade --install cbci-local $(DIR_CHARTS)/cb-ci-local --create-namespace --namespace "$$CBCI_NS" \

@@ -15,10 +15,10 @@ operationCenter:
 controllers:
   loadTest:
     controllers: ${NLoadControllers}
-agents:
-  namespace: ${agentNamespace}
-  imageCredentials:
-    registry: ${agentRegistryURL}
-    username: ${agentRegistryUserName}
-    password: ${agentRegistryUserPass}
-    email: ${agentRegistryUserMail}
+    #agents:
+    #namespace: ${agentNamespace}
+    #imageCredentials:
+    #registry: ${agentRegistryURL}
+    #username: ${agentRegistryUserName}
+    #password: ${agentRegistryUserPass}
+    #email: ${agentRegistryUserMail}
